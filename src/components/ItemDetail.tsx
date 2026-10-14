@@ -1,0 +1,279 @@
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import QRCode from 'qrcode';
+import { Archive, ArchiveRestore, Download, ImageOff, Pencil, Printer, Trash2 } from 'lucide-react';
+import { Modal } from '../kit';
+import { supabase } from '../lib/supabase';
+import {
+  ITEM_COLUMNS, STATUS_COLOR, STATUS_LABEL, itemLink, locationPath, photoUrl,
+  type Item, type ItemStatusRow, type Loc,
+} from '../lib/items';
+import { formatCurrency } from '../lib/utils';
+import { useScope } from '../scopeStore';
+import { ItemForm } from './ItemForm';
+
+function fmtDate(d: string | null) {
+  if (!d) return '';
+  const [y, m, day] = d.slice(0, 10).split('-');
+  return `${day}/${m}/${y}`;
+}
+
+function esc(s: string) {
+  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+}
+
+export function StatusChip({ status, overdue }: { status: ItemStatusRow['status']; overdue?: boolean }) {
+  const color = overdue ? '#b91c1c' : STATUS_COLOR[status];
+  return (
+    <span
+      className="text-xs font-bold"
+      style={{
+        color, padding: '0.15rem 0.55rem', borderRadius: 999, whiteSpace: 'nowrap',
+        background: `color-mix(in srgb, ${color} 14%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${color} 35%, transparent)`,
+      }}
+    >
+      {overdue ? 'Atrasado' : STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+function Row({ label, children }: { label: string; children: ReactNode }) {
+  if (children === null || children === undefined || children === '') return null;
+  return (
+    <div className="flex flex-col" style={{ gap: 2 }}>
+      <span className="inv-label">{label}</span>
+      <span style={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>{children}</span>
+    </div>
+  );
+}
+
+function QRBlock({ item, sectorName }: { item: Item; sectorName: string }) {
+  const [dataUrl, setDataUrl] = useState('');
+  const link = itemLink(item.id);
+
+  useEffect(() => {
+    let alive = true;
+    QRCode.toDataURL(link, { width: 520, margin: 2, errorCorrectionLevel: 'M' })
+      .then((u) => { if (alive) setDataUrl(u); })
+      .catch(() => { if (alive) setDataUrl(''); });
+    return () => { alive = false; };
+  }, [link]);
+
+  function print() {
+    const w = window.open('', '_blank', 'width=420,height=560');
+    if (!w) { window.alert('O navegador bloqueou a janela de impressão. Use "Baixar PNG".'); return; }
+    w.document.write(
+      `<!doctype html><meta charset="utf-8"><title>Etiqueta</title>` +
+      `<style>body{font-family:system-ui,sans-serif;text-align:center;margin:24px}img{width:260px;height:260px}h1{font-size:16px;margin:8px 0 2px}p{font-size:12px;color:#555;margin:0}</style>` +
+      `<img src="${dataUrl}" alt=""><h1>${esc(item.name)}</h1><p>${esc(sectorName)} · Inventário Sh</p>` +
+      `<script>window.onload=function(){window.print()}<\/script>`,
+    );
+    w.document.close();
+  }
+
+  if (!dataUrl) return null;
+  return (
+    <div className="sh-card flex items-center gap-3" style={{ padding: '0.75rem' }}>
+      <img src={dataUrl} alt="QR code do item" style={{ width: 112, height: 112, borderRadius: 8, background: '#fff', flexShrink: 0 }} />
+      <div className="flex flex-col gap-2 min-w-0">
+        <span className="inv-label">QR code</span>
+        <div className="flex gap-2 flex-wrap">
+          <a className="sh-btn sh-btn-secondary" href={dataUrl} download={`qr-${item.name.replace(/[^\p{L}\p{N}]+/gu, '-').slice(0, 40) || 'item'}.png`}>
+            <Download size={16} /> Baixar PNG
+          </a>
+          <button type="button" className="sh-btn sh-btn-secondary" onClick={print}>
+            <Printer size={16} /> Imprimir
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ItemDetail({
+  itemId, onClose, onChanged, categories = [],
+}: { itemId: string; onClose: () => void; onChanged?: () => void; categories?: string[] }) {
+  const { sectors, canEditSector } = useScope();
+  const [item, setItem] = useState<Item | null>(null);
+  const [status, setStatus] = useState<ItemStatusRow | null>(null);
+  const [locs, setLocs] = useState<Loc[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [baixaOpen, setBaixaOpen] = useState(false);
+  const [baixaReason, setBaixaReason] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!supabase) return;
+    setLoading(true);
+    const { data, error: err } = await supabase.from('inv_items').select(ITEM_COLUMNS).eq('id', itemId).maybeSingle();
+    if (err || !data) {
+      setItem(null);
+      setError(err ? err.message : '');
+      setLoading(false);
+      return;
+    }
+    const it = data as Item;
+    const [st, lc] = await Promise.all([
+      supabase.from('inv_item_status').select('item_id,status,overdue,expected_return,responsible_name').eq('item_id', itemId).maybeSingle(),
+      supabase.from('inv_locations').select('id,sector_id,parent_id,name,sort_order').eq('sector_id', it.sector_id),
+    ]);
+    setItem(it);
+    setStatus((st.data as ItemStatusRow | null) ?? null);
+    setLocs((lc.data ?? []) as Loc[]);
+    setError('');
+    setLoading(false);
+  }, [itemId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const sectorName = item ? sectors.find((s) => s.id === item.sector_id)?.name ?? '' : '';
+  const canEdit = item ? canEditSector(item.sector_id) : false;
+
+  async function run(fn: () => PromiseLike<{ error: { message: string } | null }>) {
+    setBusy(true);
+    setError('');
+    const { error: err } = await fn();
+    setBusy(false);
+    if (err) { setError(err.message); return false; }
+    return true;
+  }
+
+  async function baixar() {
+    if (!supabase || !item) return;
+    const ok = await run(() => supabase!.from('inv_items').update({ baixa_at: new Date().toISOString(), baixa_reason: baixaReason.trim() || null }).eq('id', item.id));
+    if (ok) { setBaixaOpen(false); setBaixaReason(''); await load(); onChanged?.(); }
+  }
+
+  async function reativar() {
+    if (!supabase || !item) return;
+    const ok = await run(() => supabase!.from('inv_items').update({ baixa_at: null, baixa_reason: null }).eq('id', item.id));
+    if (ok) { await load(); onChanged?.(); }
+  }
+
+  async function excluir() {
+    if (!supabase || !item) return;
+    const { error: err } = await supabase.from('inv_items').delete().eq('id', item.id);
+    if (err) {
+      setConfirmDelete(false);
+      setError(/foreign key|violates/i.test(err.message)
+        ? 'Este item já tem histórico de movimentos ou reparos e não pode ser excluído. Use "Dar baixa".'
+        : err.message);
+      return;
+    }
+    if (item.photo_path) await supabase.storage.from('inv-fotos').remove([item.photo_path]);
+    onChanged?.();
+    onClose();
+  }
+
+  const img = item ? photoUrl(item.photo_path, item.updated_at) : null;
+  const where = item ? [locationPath(locs, item.location_id), item.location_note].filter(Boolean).join(' — ') : '';
+
+  return (
+    <>
+      <Modal open={!editing} onClose={onClose} title={item?.name ?? 'Item'} size="lg">
+        {loading ? (
+          <p style={{ color: 'var(--sh-text-muted)' }}>Carregando…</p>
+        ) : !item ? (
+          <p className="inv-error">{error || 'Item não encontrado, ou você não tem acesso ao setor dele.'}</p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div className="inv-soft flex items-center justify-center" style={{ borderRadius: 16, overflow: 'hidden', aspectRatio: '4 / 3', maxHeight: 320, color: 'var(--sh-text-muted)' }}>
+              {img ? <img src={img} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <ImageOff size={40} />}
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {status && <StatusChip status={status.status} overdue={status.overdue} />}
+              {status?.status === 'emprestado' || status?.status === 'fora_evento'
+                ? <span className="text-sm" style={{ color: 'var(--sh-text-muted)' }}>
+                    {status.responsible_name ? `com ${status.responsible_name}` : ''}
+                    {status.expected_return ? ` · volta ${fmtDate(status.expected_return)}` : ''}
+                  </span>
+                : null}
+            </div>
+
+            {item.baixa_at && (
+              <p className="inv-error">
+                Item baixado em {fmtDate(item.baixa_at)}{item.baixa_reason ? `: ${item.baixa_reason}` : '.'}
+              </p>
+            )}
+
+            <div className="flex flex-col gap-3">
+              <Row label="Setor">{sectorName}</Row>
+              <Row label="Categoria">{item.category}</Row>
+              <Row label="Onde fica guardado">{where}</Row>
+              <Row label={item.value_kind === 'estimado' ? 'Valor estimado' : 'Valor pago'}>{item.value != null ? formatCurrency(Number(item.value)) : ''}</Row>
+              <Row label="Adquirido em">{fmtDate(item.acquired_at)}</Row>
+              <Row label="Descrição">{item.description}</Row>
+              <Row label="Observações">{item.notes}</Row>
+            </div>
+
+            <QRBlock item={item} sectorName={sectorName} />
+
+            {error && <p className="inv-error" role="alert">{error}</p>}
+
+            {canEdit && (
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2 flex-wrap">
+                  <button type="button" className="sh-btn sh-btn-primary" onClick={() => setEditing(true)} disabled={busy}>
+                    <Pencil size={16} /> Editar
+                  </button>
+                  {item.baixa_at ? (
+                    <button type="button" className="sh-btn sh-btn-secondary" onClick={reativar} disabled={busy}>
+                      <ArchiveRestore size={16} /> Reativar
+                    </button>
+                  ) : (
+                    <button type="button" className="sh-btn sh-btn-secondary" onClick={() => setBaixaOpen((v) => !v)} disabled={busy}>
+                      <Archive size={16} /> Dar baixa
+                    </button>
+                  )}
+                  <button type="button" className="sh-btn sh-btn-danger" onClick={() => setConfirmDelete(true)} disabled={busy}>
+                    <Trash2 size={16} /> Excluir
+                  </button>
+                </div>
+
+                {baixaOpen && (
+                  <div className="sh-card flex flex-col gap-2" style={{ padding: '0.75rem' }}>
+                    <label className="inv-label" htmlFor="baixa-reason">Motivo da baixa (opcional)</label>
+                    <input id="baixa-reason" className="inv-input" value={baixaReason} onChange={(e) => setBaixaReason(e.target.value)} placeholder="Ex.: quebrou, perdido, doado" />
+                    <div className="flex gap-2 justify-end">
+                      <button type="button" className="sh-btn sh-btn-secondary" onClick={() => setBaixaOpen(false)}>Cancelar</button>
+                      <button type="button" className="sh-btn sh-btn-primary" onClick={baixar} disabled={busy}>Confirmar baixa</button>
+                    </div>
+                  </div>
+                )}
+
+                {confirmDelete && (
+                  <div className="sh-card flex flex-col gap-2" style={{ padding: '0.75rem' }}>
+                    <p className="text-sm font-bold">Excluir «{item.name}» de vez? Isso não pode ser desfeito.</p>
+                    <div className="flex gap-2 justify-end">
+                      <button type="button" className="sh-btn sh-btn-secondary" onClick={() => setConfirmDelete(false)}>Cancelar</button>
+                      <button type="button" className="sh-btn sh-btn-danger" onClick={excluir}>Excluir</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {item && (
+        <ItemForm
+          open={editing}
+          item={item}
+          categories={categories}
+          onClose={() => setEditing(false)}
+          onSaved={async (_id, warning) => {
+            setEditing(false);
+            await load();
+            if (warning) setError(warning);
+            onChanged?.();
+          }}
+        />
+      )}
+    </>
+  );
+}
