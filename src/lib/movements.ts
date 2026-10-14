@@ -142,12 +142,16 @@ export interface Person {
   sub: string; // nível formativo · grupo
 }
 
-/** Usuários do app e membros do Wop (sem telefone). Membro com o mesmo nome de um usuário não repete. */
-export async function loadPeople(missionId: string): Promise<{ users: Person[]; members: Person[]; error?: string }> {
+/**
+ * Usuários do app e membros do Wop (sem telefone). Membro com o mesmo nome de um usuário não repete.
+ * Os membros do Wop podem estar ligados a outra missão (hoje todos estão em Guarulhos-SP): traz todos os que o banco
+ * deixa a pessoa ver, com os da missão do item primeiro.
+ */
+export async function loadPeople(missionId: string, missionNames: Map<string, string> = new Map()): Promise<{ users: Person[]; members: Person[]; error?: string }> {
   if (!supabase) return { users: [], members: [] };
   const [u, m] = await Promise.all([
     supabase.from('inv_profiles').select('id,name,formative_level,group_name,active').eq('active', true).order('name').range(0, 999),
-    supabase.from('inv_hub_members').select('id,name,formative_level,group_name').eq('mission_id', missionId).eq('active', true).order('name').range(0, 1999),
+    supabase.from('inv_hub_members').select('id,mission_id,name,formative_level,group_name').eq('active', true).order('name').range(0, 4999),
   ]);
   if (u.error || m.error) return { users: [], members: [], error: (u.error || m.error)!.message };
   const sub = (a: { formative_level: string | null; group_name: string | null }) =>
@@ -156,7 +160,11 @@ export async function loadPeople(missionId: string): Promise<{ users: Person[]; 
   const seen = new Set(users.map((x) => norm(x.name)));
   const members: Person[] = (m.data ?? [])
     .filter((x) => !seen.has(norm(x.name)))
-    .map((x) => ({ key: 'm' + x.id, type: 'membro_wop', id: x.id, name: x.name, sub: sub(x) }));
+    .sort((a, b) => Number(b.mission_id === missionId) - Number(a.mission_id === missionId))
+    .map((x) => ({
+      key: 'm' + x.id, type: 'membro_wop', id: x.id, name: x.name,
+      sub: [sub(x), x.mission_id !== missionId ? missionNames.get(x.mission_id)?.trim() : ''].filter(Boolean).join(' · '),
+    }));
   return { users, members };
 }
 
