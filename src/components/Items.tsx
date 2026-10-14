@@ -23,7 +23,7 @@ const FILTERS: { id: Filter; label: string }[] = [
 ];
 
 export function Items() {
-  const { loaded, loading, error: scopeError, missions, sectors, missionId, sectorId, setMission, setSector, canEditSector } = useScope();
+  const { loaded, loading, error: scopeError, missions, regionals, sectors, missionId, sectorId, setMission, setSector, canEditSector } = useScope();
 
   const [items, setItems] = useState<Item[]>([]);
   const [statuses, setStatuses] = useState<Map<string, ItemStatusRow>>(new Map());
@@ -131,7 +131,24 @@ export function Items() {
       <div className="flex flex-col gap-2 mb-3 md:flex-row">
         {missions.length > 1 && (
           <select className="inv-input" value={missionId} onChange={(e) => setMission(e.target.value)} aria-label="Missão">
-            {missions.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            {regionals.length > 0 && missions.some((m) => m.regional_id)
+              ? (
+                <>
+                  {regionals
+                    .filter((r) => missions.some((m) => m.regional_id === r.id))
+                    .map((r) => (
+                      <optgroup key={r.id} label={r.name}>
+                        {missions.filter((m) => m.regional_id === r.id).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      </optgroup>
+                    ))}
+                  {missions.some((m) => !m.regional_id || !regionals.some((r) => r.id === m.regional_id)) && (
+                    <optgroup label="Sem regional">
+                      {missions.filter((m) => !m.regional_id || !regionals.some((r) => r.id === m.regional_id)).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </optgroup>
+                  )}
+                </>
+              )
+              : missions.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
         )}
         <select className="inv-input" value={sectorId} onChange={(e) => setSector(e.target.value)} aria-label="Setor">
