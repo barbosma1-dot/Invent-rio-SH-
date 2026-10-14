@@ -3,6 +3,7 @@ import { PageHeader, ThemeToggle } from '../kit';
 import { useSession } from '../store';
 import { APP_VERSION } from '../brand';
 import { WopSyncCard } from './WopSyncCard';
+import { OrgOverview } from './OrgOverview';
 
 export function Settings() {
   const { user, signOut } = useSession();
@@ -27,6 +28,8 @@ export function Settings() {
       </div>
 
       <WopSyncCard />
+
+      <OrgOverview />
 
       <p className="text-xs text-center" style={{ color: 'var(--sh-text-faint)' }}>Inventário Sh · versão {APP_VERSION}</p>
     </div>
