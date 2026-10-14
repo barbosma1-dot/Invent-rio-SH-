@@ -1,0 +1,10 @@
+Caminhos exatos no repositório Invent-rio-SH-:
+  functions/api/integrations/_wopsync.ts          (novo)
+  functions/api/integrations/wop/sync.ts          (novo, pasta "wop" em minúsculas)
+  src/lib/wopSync.ts                              (novo)
+  src/components/WopSyncCard.tsx                  (novo)
+  src/App.tsx                                     (substitui)
+  src/components/Settings.tsx                     (substitui)
+Fora do app (não enviar ao GitHub do app, ou guardar em supabase/wop/ se quiser):
+  supabase_wop/*.sql   -> rodar no SQL Editor do WOP (01, depois 02; o 99 só para desfazer)
+  PROMPT_MESTRE_INVENTARIO_SH_v03.md
