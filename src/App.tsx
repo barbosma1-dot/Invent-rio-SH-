@@ -6,6 +6,7 @@ import { Auth } from './Auth';
 import { Home } from './components/Home';
 import { Settings } from './components/Settings';
 import { Items } from './components/Items';
+import { Moves } from './components/Moves';
 import { PublicItem } from './components/PublicItem';
 import { useScope } from './scopeStore';
 import { Placeholder } from './components/Placeholder';
@@ -95,12 +96,7 @@ export default function App() {
     <>
       {tab === 'home' && <Home />}
       {tab === 'items' && <Items />}
-      {tab === 'moves' && (
-        <Placeholder
-          title="Movimentos" subtitle="Entradas, saídas e retornos." icon={ArrowLeftRight} task="Tarefa T5"
-          items={['Entrada de item novo (compra ou doação)', 'Saída para evento ou empréstimo, com responsável', 'Retorno com condição e observações']}
-        />
-      )}
+      {tab === 'moves' && <Moves />}
       {tab === 'events' && (
         <Placeholder
           title="Eventos" subtitle="Materiais separados para cada evento." icon={CalendarDays} task="Tarefa T6"
