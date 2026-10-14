@@ -45,6 +45,7 @@ export interface ItemStatusRow {
   overdue: boolean;
   expected_return: string | null;
   responsible_name: string | null;
+  open_saida_id?: string | null;
 }
 
 export interface Loc {
