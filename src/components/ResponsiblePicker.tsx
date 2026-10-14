@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Phone, User } from 'lucide-react';
+import { useScope } from '../scopeStore';
 import { loadContact, loadPeople, norm, type Person, type Responsible, type RespType } from '../lib/movements';
 
 const TABS: { id: RespType; label: string }[] = [
@@ -25,6 +26,7 @@ export function ResponsiblePicker({
   onChange: (r: Responsible | null) => void;
   canSeeContacts: boolean;
 }) {
+  const missions = useScope((st) => st.missions);
   const [tab, setTab] = useState<RespType>(value?.type ?? 'usuario');
   const [users, setUsers] = useState<Person[]>([]);
   const [members, setMembers] = useState<Person[]>([]);
@@ -37,12 +39,12 @@ export function ResponsiblePicker({
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    loadPeople(missionId).then((r) => {
+    loadPeople(missionId, new Map(missions.map((x) => [x.id, x.name]))).then((r) => {
       if (!alive) return;
       setUsers(r.users); setMembers(r.members); setErr(r.error ?? ''); setLoading(false);
     });
     return () => { alive = false; };
-  }, [missionId]);
+  }, [missionId, missions]);
 
   // cartão: telefone e foto só para quem pode ver
   useEffect(() => {
@@ -106,7 +108,11 @@ export function ResponsiblePicker({
           ) : err ? (
             <p className="inv-error">{err}</p>
           ) : list.length === 0 ? (
-            <p className="text-sm" style={{ color: 'var(--sh-text-muted)' }}>Ninguém encontrado. Use "Pessoa avulsa" se preferir.</p>
+            <p className="text-sm" style={{ color: 'var(--sh-text-muted)' }}>
+              {tab === 'usuario'
+                ? 'Ainda não há usuários além de você. Cada pessoa do Wop aparece aqui depois do primeiro login no Inventário. Por enquanto, use "Membro do Wop" ou "Pessoa avulsa".'
+                : 'Ninguém encontrado. Use "Pessoa avulsa" se preferir.'}
+            </p>
           ) : (
             <ul className="flex flex-col gap-1" style={{ maxHeight: 200, overflowY: 'auto' }}>
               {list.map((p) => {
