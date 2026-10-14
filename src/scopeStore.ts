@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { supabase } from './lib/supabase';
 
-export interface Mission { id: string; name: string }
+export interface Mission { id: string; name: string; regional_id?: string | null }
+export interface Regional { id: string; name: string }
 export interface Sector { id: string; mission_id: string; name: string }
 export interface AccessRow {
   mission_id: string;
@@ -25,6 +26,7 @@ interface ScopeState {
   error: string;
   isAdmin: boolean;
   missions: Mission[];
+  regionals: Regional[];
   sectors: Sector[];
   access: AccessRow[];
   missionId: string;
@@ -42,6 +44,7 @@ export const useScope = create<ScopeState>((set, get) => ({
   error: '',
   isAdmin: false,
   missions: [],
+  regionals: [],
   sectors: [],
   access: [],
   missionId: '',
@@ -53,11 +56,12 @@ export const useScope = create<ScopeState>((set, get) => ({
     if (get().loaded && !force) return;
     set({ loading: true, error: '' });
 
-    const [p, a, m, s] = await Promise.all([
+    const [p, a, m, s, r] = await Promise.all([
       supabase.from('inv_profiles').select('is_admin').eq('id', userId).maybeSingle(),
       supabase.from('inv_access').select('mission_id,sector_id,access').eq('user_id', userId),
-      supabase.from('inv_missions').select('id,name').eq('active', true).order('name'),
+      supabase.from('inv_missions').select('*').eq('active', true).order('name'),
       supabase.from('inv_sectors').select('id,mission_id,name').eq('active', true).order('name'),
+      supabase.from('inv_regionals').select('id,name').order('name'), // pode não existir ainda: erro é ignorado
     ]);
 
     const err = p.error || a.error || m.error || s.error;
@@ -70,9 +74,9 @@ export const useScope = create<ScopeState>((set, get) => ({
     const sectors = (s.data ?? []) as Sector[];
     const access = (a.data ?? []) as AccessRow[];
 
-    // Só lista missões que têm algum setor visível.
-    const withSectors = missions.filter((x) => sectors.some((y) => y.mission_id === x.id));
-    const list = withSectors.length ? withSectors : missions;
+    const regionals = (r.error ? [] : (r.data ?? [])) as Regional[];
+    // Lista todas as missões ativas (mesmo sem setor ainda).
+    const list = missions;
 
     let missionId = get().missionId || readLS(K_MISSION);
     if (!list.some((x) => x.id === missionId)) missionId = list[0]?.id ?? '';
@@ -84,6 +88,7 @@ export const useScope = create<ScopeState>((set, get) => ({
       loaded: true,
       isAdmin: !!p.data?.is_admin,
       missions: list,
+      regionals,
       sectors,
       access,
       missionId,
@@ -118,6 +123,6 @@ export const useScope = create<ScopeState>((set, get) => ({
   reset: () =>
     set({
       loaded: false, loading: false, error: '', isAdmin: false,
-      missions: [], sectors: [], access: [], missionId: '', sectorId: '',
+      missions: [], regionals: [], sectors: [], access: [], missionId: '', sectorId: '',
     }),
 }));
