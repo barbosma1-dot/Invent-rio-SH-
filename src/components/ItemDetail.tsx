@@ -12,6 +12,7 @@ import { CONDITION_LABEL, MOVEMENT_COLUMNS, loadMovementContacts, type Movement,
 import { useScope } from '../scopeStore';
 import { ItemForm } from './ItemForm';
 import { MovementForm } from './MovementForm';
+import { RepairSection } from './RepairSection';
 
 function fmtDate(d: string | null) {
   if (!d) return '';
@@ -264,6 +265,14 @@ export function ItemDetail({
                 )}
               </div>
             )}
+
+            <RepairSection
+              itemId={item.id}
+              canEdit={canEdit}
+              baixado={!!item.baixa_at}
+              hasOpenSaida={!!status?.open_saida_id}
+              onChanged={async () => { await load(); onChanged?.(); }}
+            />
 
             {doneNotice && <p className="text-sm font-bold" style={{ color: 'var(--sh-primary)' }}>{doneNotice}</p>}
 
