@@ -24,6 +24,10 @@ export async function callSync(query = ''): Promise<SyncResult | null> {
     const res = await fetch(SYNC_URL + query, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
     let body: any = null;
     try { body = await res.json(); } catch { body = null; }
+    if (body === null) {
+      // Resposta que não é JSON: a Function provavelmente não está publicada (ou caiu antes de responder).
+      body = { error: `O servidor respondeu HTTP ${res.status} sem JSON. A Function /api/integrations/wop/sync pode não estar publicada no Cloudflare (confira a pasta functions/ na raiz do repositório e o log do deploy).` };
+    }
     return { status: res.status, body };
   } catch {
     return null;
