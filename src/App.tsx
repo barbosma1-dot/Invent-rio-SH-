@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Home as HomeIcon, Package, ArrowLeftRight, CalendarDays, Settings as SettingsIcon, LogOut, AlertTriangle } from 'lucide-react';
+import { Home as HomeIcon, Package, ArrowLeftRight, CalendarDays, Inbox, Settings as SettingsIcon, LogOut, AlertTriangle } from 'lucide-react';
 import { useSession } from './store';
 import { isSupabaseConfigured } from './lib/supabase';
 import { Auth } from './Auth';
@@ -8,19 +8,22 @@ import { Settings } from './components/Settings';
 import { Items } from './components/Items';
 import { Moves } from './components/Moves';
 import { Events } from './components/Events';
+import { Loans } from './components/Loans';
 import { PublicItem } from './components/PublicItem';
 import { useScope } from './scopeStore';
 import { LogoMenuButton, ThemeToggle } from './kit';
 import { APP_NAME, LOGO_ROUND } from './brand';
 import { autoSync } from './lib/wopSync';
+import { pendingCount } from './lib/loans';
 
-type Tab = 'home' | 'items' | 'moves' | 'events' | 'settings';
+type Tab = 'home' | 'items' | 'moves' | 'events' | 'loans' | 'settings';
 
 const NAV: { id: Tab; label: string; icon: typeof HomeIcon }[] = [
   { id: 'home', label: 'Início', icon: HomeIcon },
   { id: 'items', label: 'Itens', icon: Package },
   { id: 'moves', label: 'Movimentos', icon: ArrowLeftRight },
   { id: 'events', label: 'Eventos', icon: CalendarDays },
+  { id: 'loans', label: 'Pedidos', icon: Inbox },
   { id: 'settings', label: 'Ajustes', icon: SettingsIcon },
 ];
 
@@ -30,6 +33,7 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [path, setPath] = useState(window.location.pathname);
   const [wantLogin, setWantLogin] = useState(false);
+  const [pending, setPending] = useState(0); // itens esperando a minha autorização
 
   useEffect(() => init(), [init]);
 
@@ -61,6 +65,16 @@ export default function App() {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [userId]);
+
+  // Número de pedidos esperando autorização (aba Pedidos). Atualiza ao entrar, ao trocar de aba e depois de cada decisão.
+  useEffect(() => {
+    if (!userId) { setPending(0); return; }
+    let alive = true;
+    const refresh = () => { pendingCount().then((n) => { if (alive) setPending(n); }); };
+    refresh();
+    window.addEventListener('inv-loans-changed', refresh);
+    return () => { alive = false; window.removeEventListener('inv-loans-changed', refresh); };
+  }, [userId, tab]);
 
   if (!isSupabaseConfigured) {
     return (
@@ -98,6 +112,7 @@ export default function App() {
       {tab === 'items' && <Items />}
       {tab === 'moves' && <Moves />}
       {tab === 'events' && <Events />}
+      {tab === 'loans' && <Loans />}
       {tab === 'settings' && <Settings />}
     </>
   );
@@ -138,6 +153,7 @@ export default function App() {
             >
               <Icon size={20} />
               <span className="inv-nav-label">{label}</span>
+              {id === 'loans' && pending > 0 && <span className="inv-badge" aria-label={`${pending} para autorizar`}>{pending}</span>}
             </button>
           ))}
         </nav>
@@ -157,7 +173,10 @@ export default function App() {
       <nav className="sh-bottomnav" aria-label="Menu principal">
         {NAV.map(({ id, label, icon: Icon }) => (
           <button key={id} type="button" className="inv-bn-item" aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}>
-            <span className="inv-bn-icon"><Icon size={20} /></span>
+            <span className="inv-bn-icon" style={{ position: 'relative' }}>
+              <Icon size={20} />
+              {id === 'loans' && pending > 0 && <span className="inv-badge inv-badge-dot" aria-label={`${pending} para autorizar`}>{pending}</span>}
+            </span>
             {label}
           </button>
         ))}

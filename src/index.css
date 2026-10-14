@@ -86,3 +86,12 @@ body {
 .inv-input:focus { outline: 2px solid var(--sh-primary); outline-offset: 1px; }
 .inv-error { padding: 0.75rem 0.9rem; border-radius: var(--sh-radius-control); font-size: 0.85rem; font-weight: 600;
   color: var(--sh-danger); background: color-mix(in srgb, var(--sh-danger) 10%, var(--sh-surface)); border: 1px solid color-mix(in srgb, var(--sh-danger) 35%, var(--sh-border)); }
+
+/* número de pedidos esperando autorização (aba Pedidos) */
+.inv-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 1.15rem; height: 1.15rem; padding: 0 0.3rem; margin-left: auto;
+  border-radius: 999px; background: #b91c1c; color: #fff;
+  font-size: 0.65rem; font-weight: 800; line-height: 1;
+}
+.inv-badge-dot { position: absolute; top: -0.25rem; right: 0.35rem; margin-left: 0; }
