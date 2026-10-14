@@ -18,6 +18,9 @@ const json = (body: unknown, status = 200) =>
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store" }
   });
 
+// GET /api/integrations/wop/sync -> teste de "a Function está no ar?" (não revela nenhuma configuração nem dado).
+export const onRequestGet = async () => json({ ok: true, function: "wop-sync", deployed: true });
+
 export const onRequestPost = async (context: { request: Request; env: Env }) => {
   const { request, env } = context;
   const url = String(env.VITE_SUPABASE_URL || env.SUPABASE_URL || "").trim().replace(/\/+$/, "");
