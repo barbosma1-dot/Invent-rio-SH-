@@ -118,7 +118,7 @@ export function ItemForm({
   const user = useSession((s) => s.user);
   const { sectors, missionId, canEditSector } = useScope();
   const editableSectors = useMemo(
-    () => sectors.filter((s) => s.mission_id === missionId && canEditSector(s.id)),
+    () => sectors.filter((s) => s.active && s.mission_id === missionId && canEditSector(s.id)),
     [sectors, missionId, canEditSector],
   );
 

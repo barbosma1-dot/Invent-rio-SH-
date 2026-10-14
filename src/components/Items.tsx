@@ -23,7 +23,7 @@ const FILTERS: { id: Filter; label: string }[] = [
 ];
 
 export function Items() {
-  const { loaded, loading, error: scopeError, missions, regionals, sectors, missionId, sectorId, setMission, setSector, canEditSector } = useScope();
+  const { loaded, loading, error: scopeError, missions, regionals, sectors, missionId, sectorId, missionNotice, clearMissionNotice, setMission, setSector, canEditSector } = useScope();
 
   const [items, setItems] = useState<Item[]>([]);
   const [statuses, setStatuses] = useState<Map<string, ItemStatusRow>>(new Map());
@@ -37,8 +37,16 @@ export function Items() {
   const [formOpen, setFormOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
 
-  const missionSectors = useMemo(() => sectors.filter((s) => s.mission_id === missionId), [sectors, missionId]);
-  const sectorName = useMemo(() => new Map(sectors.map((s) => [s.id, s.name])), [sectors]);
+  // setores ativos da missão (cadastro e filtro); os desativados no Wop só aparecem no filtro se ainda tiverem itens
+  const missionSectors = useMemo(() => sectors.filter((s) => s.mission_id === missionId && s.active), [sectors, missionId]);
+  const inactiveShown = useMemo(
+    () => sectors.filter((s) => s.mission_id === missionId && !s.active && (s.id === sectorId || items.some((i) => i.sector_id === s.id))),
+    [sectors, missionId, sectorId, items],
+  );
+  const sectorName = useMemo(
+    () => new Map(sectors.map((s) => [s.id, s.active ? s.name : `${s.name} (inativo)`])),
+    [sectors],
+  );
   const canCreate = sectorId ? canEditSector(sectorId) : missionSectors.some((s) => canEditSector(s.id));
 
   const reload = useCallback(async () => {
@@ -127,6 +135,8 @@ export function Items() {
         }
       />
 
+      {missionNotice && <p className="inv-error mb-3" role="status" onClick={clearMissionNotice}>{missionNotice}</p>}
+
       {/* missão e setor */}
       <div className="flex flex-col gap-2 mb-3 md:flex-row">
         {missions.length > 1 && (
@@ -154,6 +164,7 @@ export function Items() {
         <select className="inv-input" value={sectorId} onChange={(e) => setSector(e.target.value)} aria-label="Setor">
           <option value="">Todos os setores</option>
           {missionSectors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          {inactiveShown.map((s) => <option key={s.id} value={s.id}>{s.name} (inativo)</option>)}
         </select>
       </div>
 
@@ -212,7 +223,7 @@ export function Items() {
                     <span className="flex flex-col gap-1 min-w-0" style={{ flex: 1 }}>
                       <span className="font-bold" style={{ overflowWrap: 'anywhere' }}>{i.name}</span>
                       <span className="text-xs" style={{ color: 'var(--sh-text-muted)' }}>
-                        {[i.category, !sectorId ? sectorName.get(i.sector_id) : null].filter(Boolean).join(' · ')}
+                        {[i.category, !sectorId ? (sectorName.get(i.sector_id) ?? 'Setor não encontrado') : null].filter(Boolean).join(' · ')}
                       </span>
                       {where && (
                         <span className="text-xs flex items-center gap-1" style={{ color: 'var(--sh-text-muted)' }}>

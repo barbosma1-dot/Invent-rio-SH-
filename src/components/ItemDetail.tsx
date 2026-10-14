@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import QRCode from 'qrcode';
 import { Archive, ArchiveRestore, Download, ImageOff, Pencil, Printer, Trash2 } from 'lucide-react';
 import { Modal } from '../kit';
@@ -104,6 +104,8 @@ export function ItemDetail({
   const [baixaReason, setBaixaReason] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  const confirmRef = useRef<HTMLDivElement>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
 
   const load = useCallback(async () => {
     if (!supabase) return;
@@ -129,7 +131,9 @@ export function ItemDetail({
 
   useEffect(() => { load(); }, [load]);
 
-  const sectorName = item ? sectors.find((s) => s.id === item.sector_id)?.name ?? '' : '';
+  const sectorRow = item ? sectors.find((s) => s.id === item.sector_id) : undefined;
+  const sectorName = sectorRow?.name ?? '';
+  const sectorLabel = !item ? '' : !sectorRow ? 'Setor não encontrado' : sectorRow.active ? sectorRow.name : `${sectorRow.name} (inativo)`;
   const canEdit = item ? canEditSector(item.sector_id) : false;
 
   async function run(fn: () => PromiseLike<{ error: { message: string } | null }>) {
@@ -153,17 +157,34 @@ export function ItemDetail({
     if (ok) { await load(); onChanged?.(); }
   }
 
+  // a confirmação e as mensagens ficam abaixo dos botões: rolar até elas para o toque nunca "parecer sem efeito"
+  useEffect(() => {
+    if (confirmDelete) confirmRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [confirmDelete]);
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [error]);
+
   async function excluir() {
-    if (!supabase || !item) return;
-    const { error: err } = await supabase.from('inv_items').delete().eq('id', item.id);
+    if (!supabase || !item || busy) return;
+    setBusy(true);
+    setError('');
+    // .select('id') devolve as linhas apagadas: sem isso, uma política de segurança que bloqueia não dá erro e parece que "não fez nada"
+    const { data, error: err } = await supabase.from('inv_items').delete().eq('id', item.id).select('id');
+    setBusy(false);
     if (err) {
       setConfirmDelete(false);
       setError(/foreign key|violates/i.test(err.message)
         ? 'Este item já tem histórico de movimentos ou reparos e não pode ser excluído. Use "Dar baixa".'
-        : err.message);
+        : `Não foi possível excluir: ${err.message}`);
       return;
     }
-    if (item.photo_path) await supabase.storage.from('inv-fotos').remove([item.photo_path]);
+    if (!data || data.length === 0) {
+      setConfirmDelete(false);
+      setError('Não foi possível excluir: o banco não permitiu apagar este item (sem permissão ou ele já foi excluído). Use "Dar baixa" ou fale com o administrador.');
+      return;
+    }
+    if (item.photo_path) await supabase.storage.from('inv-fotos').remove([item.photo_path]).catch(() => null);
     onChanged?.();
     onClose();
   }
@@ -201,7 +222,7 @@ export function ItemDetail({
             )}
 
             <div className="flex flex-col gap-3">
-              <Row label="Setor">{sectorName}</Row>
+              <Row label="Setor">{sectorLabel}</Row>
               <Row label="Categoria">{item.category}</Row>
               <Row label="Onde fica guardado">{where}</Row>
               <Row label={item.value_kind === 'estimado' ? 'Valor estimado' : 'Valor pago'}>{item.value != null ? formatCurrency(Number(item.value)) : ''}</Row>
@@ -212,7 +233,7 @@ export function ItemDetail({
 
             <QRBlock item={item} sectorName={sectorName} />
 
-            {error && <p className="inv-error" role="alert">{error}</p>}
+            {error && <p ref={errorRef} className="inv-error" role="alert">{error}</p>}
 
             {canEdit && (
               <div className="flex flex-col gap-2">
@@ -246,11 +267,11 @@ export function ItemDetail({
                 )}
 
                 {confirmDelete && (
-                  <div className="sh-card flex flex-col gap-2" style={{ padding: '0.75rem' }}>
+                  <div ref={confirmRef} className="sh-card flex flex-col gap-2" style={{ padding: '0.75rem' }}>
                     <p className="text-sm font-bold">Excluir «{item.name}» de vez? Isso não pode ser desfeito.</p>
                     <div className="flex gap-2 justify-end">
                       <button type="button" className="sh-btn sh-btn-secondary" onClick={() => setConfirmDelete(false)}>Cancelar</button>
-                      <button type="button" className="sh-btn sh-btn-danger" onClick={excluir}>Excluir</button>
+                      <button type="button" className="sh-btn sh-btn-danger" onClick={excluir} disabled={busy}>{busy ? 'Excluindo…' : 'Excluir'}</button>
                     </div>
                   </div>
                 )}
