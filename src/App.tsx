@@ -8,6 +8,7 @@ import { Settings } from './components/Settings';
 import { Placeholder } from './components/Placeholder';
 import { LogoMenuButton, ThemeToggle } from './kit';
 import { APP_NAME, LOGO_ROUND } from './brand';
+import { autoSync } from './lib/wopSync';
 
 type Tab = 'home' | 'items' | 'moves' | 'events' | 'settings';
 
@@ -25,6 +26,16 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => init(), [init]);
+
+  // Sincroniza com o Wop ao entrar e ao voltar para a aba (a Function limita a frequência).
+  const userId = user?.id;
+  useEffect(() => {
+    if (!userId) return;
+    autoSync();
+    const onVisible = () => { if (document.visibilityState === 'visible') autoSync(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [userId]);
 
   if (!isSupabaseConfigured) {
     return (
