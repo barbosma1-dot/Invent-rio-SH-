@@ -5,6 +5,7 @@ import { APP_VERSION } from '../brand';
 import { WopSyncCard } from './WopSyncCard';
 import { OrgOverview } from './OrgOverview';
 import { InstallCard } from './InstallCard';
+import { ExportCard } from './ExportCard';
 
 export function Settings() {
   const { user, signOut } = useSession();
@@ -27,6 +28,8 @@ export function Settings() {
           Noturno: escuro automático das 18h às 6h.
         </p>
       </div>
+
+      <ExportCard />
 
       <InstallCard />
 
