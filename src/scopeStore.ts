@@ -3,7 +3,7 @@ import { supabase } from './lib/supabase';
 
 export interface Mission { id: string; name: string; regional_id?: string | null }
 export interface Regional { id: string; name: string }
-export interface Sector { id: string; mission_id: string; name: string }
+export interface Sector { id: string; mission_id: string; name: string; active: boolean }
 export interface AccessRow {
   mission_id: string;
   sector_id: string | null;
@@ -31,6 +31,8 @@ interface ScopeState {
   access: AccessRow[];
   missionId: string;
   sectorId: string; // '' = todos os setores da missão
+  missionNotice: string; // aviso quando a missão lembrada deixou de existir
+  clearMissionNotice: () => void;
   load: (userId: string, force?: boolean) => Promise<void>;
   setMission: (id: string) => void;
   setSector: (id: string) => void;
@@ -49,6 +51,8 @@ export const useScope = create<ScopeState>((set, get) => ({
   access: [],
   missionId: '',
   sectorId: '',
+  missionNotice: '',
+  clearMissionNotice: () => set({ missionNotice: '' }),
 
   load: async (userId, force = false) => {
     if (!supabase) return;
@@ -60,7 +64,8 @@ export const useScope = create<ScopeState>((set, get) => ({
       supabase.from('inv_profiles').select('is_admin').eq('id', userId).maybeSingle(),
       supabase.from('inv_access').select('mission_id,sector_id,access').eq('user_id', userId),
       supabase.from('inv_missions').select('*').eq('active', true).order('name'),
-      supabase.from('inv_sectors').select('id,mission_id,name').eq('active', true).order('name'),
+      // traz também os setores desativados no Wop: itens antigos continuam com o nome do setor
+      supabase.from('inv_sectors').select('id,mission_id,name,active').order('name'),
       supabase.from('inv_regionals').select('id,name').order('name'), // pode não existir ainda: erro é ignorado
     ]);
 
@@ -78,8 +83,16 @@ export const useScope = create<ScopeState>((set, get) => ({
     // Lista todas as missões ativas (mesmo sem setor ainda).
     const list = missions;
 
-    let missionId = get().missionId || readLS(K_MISSION);
-    if (!list.some((x) => x.id === missionId)) missionId = list[0]?.id ?? '';
+    const wanted = get().missionId || readLS(K_MISSION);
+    let missionId = wanted;
+    let missionNotice = '';
+    if (!list.some((x) => x.id === missionId)) {
+      missionId = list[0]?.id ?? '';
+      if (wanted && missionId) {
+        missionNotice = 'A missão que você estava usando não está mais disponível. Mostrando ' + (list[0]?.name ?? '') + '.';
+      }
+    }
+    if (missionId) writeLS(K_MISSION, missionId);
     let sectorId = get().sectorId || readLS(K_SECTOR);
     if (!sectors.some((x) => x.id === sectorId && x.mission_id === missionId)) sectorId = '';
 
@@ -93,13 +106,14 @@ export const useScope = create<ScopeState>((set, get) => ({
       access,
       missionId,
       sectorId,
+      missionNotice,
     });
   },
 
   setMission: (id) => {
     writeLS(K_MISSION, id);
     writeLS(K_SECTOR, '');
-    set({ missionId: id, sectorId: '' });
+    set({ missionId: id, sectorId: '', missionNotice: '' });
   },
 
   setSector: (id) => {
@@ -123,6 +137,6 @@ export const useScope = create<ScopeState>((set, get) => ({
   reset: () =>
     set({
       loaded: false, loading: false, error: '', isAdmin: false,
-      missions: [], regionals: [], sectors: [], access: [], missionId: '', sectorId: '',
+      missions: [], regionals: [], sectors: [], access: [], missionId: '', sectorId: '', missionNotice: '',
     }),
 }));
