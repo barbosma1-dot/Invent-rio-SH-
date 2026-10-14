@@ -91,7 +91,7 @@ export function Auth() {
             <span className="flex-1" style={{ height: 1, background: 'var(--sh-border)' }} />
           </div>
 
-          <GoogleLogin supabase={supabase!} onError={setError} />
+          <GoogleLogin supabase={supabase!} redirectTo={window.location.href} onError={setError} />
         </div>
       </div>
     </div>
