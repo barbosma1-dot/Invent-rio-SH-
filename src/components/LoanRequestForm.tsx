@@ -194,7 +194,7 @@ export function LoanRequestForm({
         </div>
 
         <p className="text-xs" style={{ color: 'var(--sh-text-faint)' }}>
-          Cada item precisa da autorização de quem coordena o setor dono dele. Se você mesmo coordena esse setor, o item já sai autorizado.
+          Todo item fica aguardando a autorização de quem coordena o setor dono dele. A saída só pode ser registrada depois que o item for autorizado.
         </p>
 
         {error && <p className="inv-error" role="alert">{error}</p>}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, Inbox } from 'lucide-react';
 import { PageHeader } from '../kit';
 import { supabase } from '../lib/supabase';
 import { EVENT_COLUMNS, loadEventCounts, type EventCounts, type EventFull } from '../lib/events';
@@ -7,6 +7,8 @@ import { fmtDate } from '../lib/movements';
 import { useScope } from '../scopeStore';
 import { EventDetail } from './EventDetail';
 import { EventForm } from './EventForm';
+import { LoanRequestForm } from './LoanRequestForm';
+import { notifyLoansChanged } from './Loans';
 
 type Filter = 'pendentes' | 'todos';
 
@@ -19,6 +21,8 @@ export function Events() {
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [ask, setAsk] = useState<{ sectorId?: string; eventId?: string } | null>(null);
+  const [notice, setNotice] = useState('');
 
   const missionSectors = useMemo(() => sectors.filter((s) => s.mission_id === missionId && s.active), [sectors, missionId]);
   const sectorName = useMemo(() => new Map(sectors.map((s) => [s.id, s.name])), [sectors]);
@@ -84,6 +88,11 @@ export function Events() {
         </button>
       </div>
 
+      <button type="button" className="sh-btn sh-btn-secondary mb-3" style={{ minHeight: 40 }} onClick={() => setAsk({ sectorId: sectorId || undefined })}>
+        <Inbox size={18} /> Pedir itens de outro setor
+      </button>
+      {notice && <p className="text-sm font-bold mb-3" style={{ color: 'var(--sh-primary)' }}>{notice}</p>}
+
       {error && <p className="inv-error mb-3" role="alert">{error}</p>}
       {fetching && events.length === 0 && <p style={{ color: 'var(--sh-text-muted)' }}>Carregando…</p>}
       {!fetching && !error && visible.length === 0 && (
@@ -98,8 +107,8 @@ export function Events() {
         {visible.map((e) => {
           const c = counts.get(e.id) ?? { total: 0, open: 0, overdue: 0 };
           return (
-            <li key={e.id}>
-              <button type="button" className="sh-card flex items-start gap-3 text-left w-full" style={{ padding: '0.75rem' }} onClick={() => setSelected(e.id)}>
+            <li key={e.id} className="sh-card" style={{ padding: 0 }}>
+              <button type="button" className="flex items-start gap-3 text-left w-full" style={{ padding: '0.75rem', background: 'none', border: 0, color: 'inherit' }} onClick={() => setSelected(e.id)}>
                 <span className="inv-soft flex items-center justify-center" style={{ width: 44, height: 44, borderRadius: 12, flexShrink: 0, color: 'var(--sh-primary)' }}>
                   <CalendarDays size={22} />
                 </span>
@@ -118,6 +127,11 @@ export function Events() {
                   </span>
                 </span>
               </button>
+              <div style={{ padding: '0 0.75rem 0.75rem' }}>
+                <button type="button" className="sh-btn sh-btn-secondary" style={{ minHeight: 36, fontSize: '0.8rem' }} onClick={() => setAsk({ sectorId: e.sector_id, eventId: e.id })}>
+                  <Inbox size={16} /> Pedir itens para este evento
+                </button>
+              </div>
             </li>
           );
         })}
@@ -128,6 +142,15 @@ export function Events() {
         defaultSectorId={sectorId}
         onClose={() => setFormOpen(false)}
         onSaved={(ev) => { setFormOpen(false); reload(); setSelected(ev.id); }}
+      />
+
+      <LoanRequestForm
+        key={`${ask?.sectorId ?? ''}-${ask?.eventId ?? ''}`}
+        open={!!ask}
+        fixedSectorId={ask?.sectorId}
+        fixedEventId={ask?.eventId}
+        onClose={() => setAsk(null)}
+        onDone={(msg) => { setAsk(null); setNotice(msg); reload(); notifyLoansChanged(); }}
       />
 
       {selected && <EventDetail key={selected} eventId={selected} onClose={() => setSelected(null)} onChanged={reload} />}
