@@ -130,18 +130,6 @@ export function Items() {
         title="Itens"
         subtitle={sectorId ? sectorName.get(sectorId) : 'Todos os setores da missão'}
         primary={canCreate ? { label: 'Novo item', onClick: () => setFormOpen(true) } : undefined}
-        actions={
-          <div className="flex gap-2">
-            <button type="button" className="sh-btn sh-btn-secondary" onClick={() => setScanOpen(true)}>
-              <ScanLine size={18} /> Ler QR
-            </button>
-            {visible.length > 0 && (
-              <button type="button" className="sh-btn sh-btn-secondary" onClick={() => setLabelsOpen(true)}>
-                <QrCode size={18} /> Etiquetas
-              </button>
-            )}
-          </div>
-        }
       />
 
       {missionNotice && <p className="inv-error mb-3" role="status" onClick={clearMissionNotice}>{missionNotice}</p>}
@@ -175,6 +163,18 @@ export function Items() {
           {missionSectors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           {inactiveShown.map((s) => <option key={s.id} value={s.id}>{s.name} (inativo)</option>)}
         </select>
+      </div>
+
+      {/* leitor de QR e etiquetas (fora do cabeçalho: o kit esconde as ações dele no celular) */}
+      <div className="flex gap-2 mb-3">
+        <button type="button" className="sh-btn sh-btn-secondary" style={{ flex: 1 }} onClick={() => setScanOpen(true)}>
+          <ScanLine size={18} /> Ler QR
+        </button>
+        {visible.length > 0 && (
+          <button type="button" className="sh-btn sh-btn-secondary" style={{ flex: 1 }} onClick={() => setLabelsOpen(true)}>
+            <QrCode size={18} /> Etiquetas
+          </button>
+        )}
       </div>
 
       {/* busca */}
