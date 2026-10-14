@@ -7,9 +7,9 @@ import { Home } from './components/Home';
 import { Settings } from './components/Settings';
 import { Items } from './components/Items';
 import { Moves } from './components/Moves';
+import { Events } from './components/Events';
 import { PublicItem } from './components/PublicItem';
 import { useScope } from './scopeStore';
-import { Placeholder } from './components/Placeholder';
 import { LogoMenuButton, ThemeToggle } from './kit';
 import { APP_NAME, LOGO_ROUND } from './brand';
 import { autoSync } from './lib/wopSync';
@@ -97,12 +97,7 @@ export default function App() {
       {tab === 'home' && <Home />}
       {tab === 'items' && <Items />}
       {tab === 'moves' && <Moves />}
-      {tab === 'events' && (
-        <Placeholder
-          title="Eventos" subtitle="Materiais separados para cada evento." icon={CalendarDays} task="Tarefa T6"
-          items={['Lista de itens por evento', 'Conferência na volta', 'Pendências do que não retornou']}
-        />
-      )}
+      {tab === 'events' && <Events />}
       {tab === 'settings' && <Settings />}
     </>
   );
