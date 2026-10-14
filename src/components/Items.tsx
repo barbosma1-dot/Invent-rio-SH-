@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ImageOff, MapPin, Package, ScanLine, Search } from 'lucide-react';
+import { ImageOff, MapPin, Package, QrCode, ScanLine, Search } from 'lucide-react';
 import { PageHeader } from '../kit';
 import { supabase } from '../lib/supabase';
 import {
@@ -10,6 +10,7 @@ import { useScope } from '../scopeStore';
 import { ItemDetail, StatusChip } from './ItemDetail';
 import { ItemForm } from './ItemForm';
 import { QRScanner } from './QRScanner';
+import { LabelsBatch } from './LabelsBatch';
 
 type Filter = 'ativos' | Status;
 
@@ -36,6 +37,7 @@ export function Items() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  const [labelsOpen, setLabelsOpen] = useState(false);
 
   // setores ativos da missão (cadastro e filtro); os desativados no Wop só aparecem no filtro se ainda tiverem itens
   const missionSectors = useMemo(() => sectors.filter((s) => s.mission_id === missionId && s.active), [sectors, missionId]);
@@ -129,9 +131,16 @@ export function Items() {
         subtitle={sectorId ? sectorName.get(sectorId) : 'Todos os setores da missão'}
         primary={canCreate ? { label: 'Novo item', onClick: () => setFormOpen(true) } : undefined}
         actions={
-          <button type="button" className="sh-btn sh-btn-secondary" onClick={() => setScanOpen(true)}>
-            <ScanLine size={18} /> Ler QR
-          </button>
+          <div className="flex gap-2">
+            <button type="button" className="sh-btn sh-btn-secondary" onClick={() => setScanOpen(true)}>
+              <ScanLine size={18} /> Ler QR
+            </button>
+            {visible.length > 0 && (
+              <button type="button" className="sh-btn sh-btn-secondary" onClick={() => setLabelsOpen(true)}>
+                <QrCode size={18} /> Etiquetas
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -239,6 +248,12 @@ export function Items() {
           </ul>
         </>
       )}
+
+      <LabelsBatch
+        open={labelsOpen}
+        onClose={() => setLabelsOpen(false)}
+        items={visible.map((i) => ({ id: i.id, name: i.name, sector: sectorName.get(i.sector_id) ?? '' }))}
+      />
 
       <ItemForm
         open={formOpen}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Phone, User } from 'lucide-react';
+import { Mail, Phone, User } from 'lucide-react';
 import { useScope } from '../scopeStore';
 import { loadContact, loadPeople, norm, type Person, type Responsible, type RespType } from '../lib/movements';
 
@@ -33,7 +33,7 @@ export function ResponsiblePicker({
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [search, setSearch] = useState('');
-  const [contact, setContact] = useState<{ phone: string | null; photo_url: string | null } | null>(null);
+  const [contact, setContact] = useState<{ phone: string | null; photo_url: string | null; email?: string | null } | null>(null);
   const [extra, setExtra] = useState<string>(''); // nível/grupo do selecionado
 
   useEffect(() => {
@@ -143,6 +143,11 @@ export function ResponsiblePicker({
             {canSeeContacts && (contact?.phone || value.phone) && (
               <a className="text-xs flex items-center gap-1" style={{ color: 'var(--sh-primary)' }} href={`tel:${(contact?.phone || value.phone || '').replace(/[^\d+]/g, '')}`}>
                 <Phone size={12} /> {contact?.phone || value.phone}
+              </a>
+            )}
+            {canSeeContacts && contact?.email && (
+              <a className="text-xs flex items-center gap-1" style={{ color: 'var(--sh-primary)', overflowWrap: 'anywhere' }} href={`mailto:${contact.email}`}>
+                <Mail size={12} /> {contact.email}
               </a>
             )}
           </div>
