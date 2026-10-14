@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, ImageOff, Pencil, Plus, Undo2 } from 'lucide-react';
 import { Modal } from '../kit';
+import { listLoans, cancelLoans, type LoanRow } from '../lib/loans';
 import { supabase } from '../lib/supabase';
 import { photoUrl } from '../lib/items';
 import { EVENT_COLUMNS, registerBatchRetorno, type EventFull } from '../lib/events';
@@ -13,6 +14,10 @@ import { useSession } from '../store';
 import { EventForm } from './EventForm';
 import { EventPickItems } from './EventPickItems';
 import { ItemDetail } from './ItemDetail';
+import { LoanItemCard } from './LoanItemCard';
+import { LoanRequestForm } from './LoanRequestForm';
+import { LoanUseForm } from './LoanUseForm';
+import { notifyLoansChanged } from './Loans';
 
 type Row = Movement & { inv_items: { name: string; photo_path: string | null } | null };
 interface Back { return_of: string; occurred_at: string; condition: string | null; needs_repair: boolean }
@@ -30,6 +35,9 @@ export function EventDetail({
   const [notice, setNotice] = useState('');
   const [editing, setEditing] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [loans, setLoans] = useState<LoanRow[]>([]);
+  const [asking, setAsking] = useState(false);
+  const [use, setUse] = useState<{ row: LoanRow; mode: 'saida' | 'retorno' } | null>(null);
   const [itemId, setItemId] = useState<string | null>(null);
   // conferência
   const [marked, setMarked] = useState<Set<string>>(new Set()); // ids das saídas marcadas
@@ -45,6 +53,8 @@ export function EventDetail({
     const ev = await supabase.from('inv_events').select(EVENT_COLUMNS).eq('id', eventId).maybeSingle();
     if (ev.error || !ev.data) { setEvent(null); setError(ev.error?.message ?? ''); setLoading(false); return; }
     setEvent(ev.data as EventFull);
+    const ln = await listLoans((ev.data as EventFull).mission_id, eventId);
+    setLoans(ln.ok ? ln.data : []);
     const sd = await supabase.from('inv_movements').select(`${MOVEMENT_COLUMNS},inv_items(name,photo_path)`)
       .eq('event_id', eventId).eq('kind', 'saida').order('occurred_at', { ascending: true }).range(0, 999);
     if (sd.error) { setError(sd.error.message); setLoading(false); return; }
@@ -71,6 +81,16 @@ export function EventDetail({
     const n = new Set(set); if (n.has(id)) n.delete(id); else n.add(id); setter(n);
   }
 
+  async function cancelLoan(row: LoanRow) {
+    setBusy(true); setError('');
+    const r = await cancelLoans([row.loan_item_id]);
+    setBusy(false);
+    if (!r.ok) { setError(r.error); return; }
+    setNotice('Pedido cancelado.');
+    await load();
+    notifyLoansChanged();
+  }
+
   async function confirmReturn() {
     if (!user || busy || marked.size === 0) return;
     setBusy(true); setError('');
@@ -93,7 +113,7 @@ export function EventDetail({
 
   return (
     <>
-      <Modal open={!editing && !picking && !itemId} onClose={onClose} title={event?.name ?? 'Evento'} size="lg">
+      <Modal open={!editing && !picking && !asking && !use && !itemId} onClose={onClose} title={event?.name ?? 'Evento'} size="lg">
         {loading ? (
           <p style={{ color: 'var(--sh-text-muted)' }}>Carregando…</p>
         ) : !event ? (
@@ -113,6 +133,9 @@ export function EventDetail({
             <div className="flex gap-2 flex-wrap">
               <button type="button" className="sh-btn sh-btn-primary" onClick={() => { setNotice(''); setPicking(true); }}>
                 <Plus size={16} /> Separar itens
+              </button>
+              <button type="button" className="sh-btn sh-btn-secondary" onClick={() => { setNotice(''); setAsking(true); }}>
+                <Plus size={16} /> Pedir de outro setor
               </button>
               {canEdit && (
                 <button type="button" className="sh-btn sh-btn-secondary" onClick={() => setEditing(true)}>
@@ -178,6 +201,24 @@ export function EventDetail({
               )}
             </div>
 
+            {loans.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <span className="inv-label">Itens de outros setores · {loans.length}</span>
+                <ul className="flex flex-col gap-2">
+                  {loans.map((l) => (
+                    <li key={l.loan_item_id}>
+                      <LoanItemCard
+                        row={l} showDest={false} busy={busy}
+                        onOut={(x) => setUse({ row: x, mode: 'saida' })}
+                        onBack={(x) => setUse({ row: x, mode: 'retorno' })}
+                        onCancel={cancelLoan}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {marked.size > 0 && (
               <div className="sh-card flex flex-col gap-3" style={{ padding: '0.75rem' }}>
                 <span className="inv-label">Conferência na volta · {marked.size} {marked.size === 1 ? 'item' : 'itens'}</span>
@@ -221,7 +262,7 @@ export function EventDetail({
         <EventForm
           open={editing}
           event={event}
-          canDelete={saidas.length === 0}
+          canDelete={saidas.length === 0 && loans.length === 0}
           onClose={() => setEditing(false)}
           onSaved={async () => { setEditing(false); await load(); onChanged(); }}
           onDeleted={() => { setEditing(false); onChanged(); onClose(); }}
@@ -236,6 +277,23 @@ export function EventDetail({
           onDone={async (w) => { setPicking(false); setNotice(w ?? 'Saída registrada.'); await load(); onChanged(); }}
         />
       )}
+
+      {event && (
+        <LoanRequestForm
+          open={asking}
+          fixedSectorId={event.sector_id}
+          fixedEventId={event.id}
+          onClose={() => setAsking(false)}
+          onDone={async (msg) => { setAsking(false); setNotice(msg); await load(); onChanged(); notifyLoansChanged(); }}
+        />
+      )}
+
+      <LoanUseForm
+        row={use?.row ?? null}
+        mode={use?.mode ?? 'saida'}
+        onClose={() => setUse(null)}
+        onDone={async (msg) => { setUse(null); setNotice(msg); await load(); onChanged(); notifyLoansChanged(); }}
+      />
 
       {itemId && <ItemDetail key={itemId} itemId={itemId} onClose={() => setItemId(null)} onChanged={async () => { await load(); onChanged(); }} />}
     </>
