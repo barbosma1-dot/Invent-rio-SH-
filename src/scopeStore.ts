@@ -1,0 +1,123 @@
+import { create } from 'zustand';
+import { supabase } from './lib/supabase';
+
+export interface Mission { id: string; name: string }
+export interface Sector { id: string; mission_id: string; name: string }
+export interface AccessRow {
+  mission_id: string;
+  sector_id: string | null;
+  access: 'gestor' | 'coordenador' | 'membro';
+}
+
+const K_MISSION = 'inv.mission';
+const K_SECTOR = 'inv.sector';
+
+function readLS(key: string): string {
+  try { return localStorage.getItem(key) ?? ''; } catch { return ''; }
+}
+function writeLS(key: string, value: string) {
+  try { localStorage.setItem(key, value); } catch { /* sem armazenamento: segue sem lembrar */ }
+}
+
+interface ScopeState {
+  loaded: boolean;
+  loading: boolean;
+  error: string;
+  isAdmin: boolean;
+  missions: Mission[];
+  sectors: Sector[];
+  access: AccessRow[];
+  missionId: string;
+  sectorId: string; // '' = todos os setores da missão
+  load: (userId: string, force?: boolean) => Promise<void>;
+  setMission: (id: string) => void;
+  setSector: (id: string) => void;
+  canEditSector: (sectorId: string) => boolean;
+  reset: () => void;
+}
+
+export const useScope = create<ScopeState>((set, get) => ({
+  loaded: false,
+  loading: false,
+  error: '',
+  isAdmin: false,
+  missions: [],
+  sectors: [],
+  access: [],
+  missionId: '',
+  sectorId: '',
+
+  load: async (userId, force = false) => {
+    if (!supabase) return;
+    if (get().loading) return;
+    if (get().loaded && !force) return;
+    set({ loading: true, error: '' });
+
+    const [p, a, m, s] = await Promise.all([
+      supabase.from('inv_profiles').select('is_admin').eq('id', userId).maybeSingle(),
+      supabase.from('inv_access').select('mission_id,sector_id,access').eq('user_id', userId),
+      supabase.from('inv_missions').select('id,name').eq('active', true).order('name'),
+      supabase.from('inv_sectors').select('id,mission_id,name').eq('active', true).order('name'),
+    ]);
+
+    const err = p.error || a.error || m.error || s.error;
+    if (err) {
+      set({ loading: false, loaded: false, error: err.message });
+      return;
+    }
+
+    const missions = (m.data ?? []) as Mission[];
+    const sectors = (s.data ?? []) as Sector[];
+    const access = (a.data ?? []) as AccessRow[];
+
+    // Só lista missões que têm algum setor visível.
+    const withSectors = missions.filter((x) => sectors.some((y) => y.mission_id === x.id));
+    const list = withSectors.length ? withSectors : missions;
+
+    let missionId = get().missionId || readLS(K_MISSION);
+    if (!list.some((x) => x.id === missionId)) missionId = list[0]?.id ?? '';
+    let sectorId = get().sectorId || readLS(K_SECTOR);
+    if (!sectors.some((x) => x.id === sectorId && x.mission_id === missionId)) sectorId = '';
+
+    set({
+      loading: false,
+      loaded: true,
+      isAdmin: !!p.data?.is_admin,
+      missions: list,
+      sectors,
+      access,
+      missionId,
+      sectorId,
+    });
+  },
+
+  setMission: (id) => {
+    writeLS(K_MISSION, id);
+    writeLS(K_SECTOR, '');
+    set({ missionId: id, sectorId: '' });
+  },
+
+  setSector: (id) => {
+    writeLS(K_SECTOR, id);
+    set({ sectorId: id });
+  },
+
+  // Espelha as regras do banco (o banco é quem decide de verdade).
+  canEditSector: (sectorId) => {
+    const { isAdmin, sectors, access } = get();
+    if (isAdmin) return true;
+    const sector = sectors.find((x) => x.id === sectorId);
+    if (!sector) return false;
+    return access.some(
+      (r) =>
+        r.mission_id === sector.mission_id &&
+        (r.access === 'gestor' || (r.access === 'coordenador' && r.sector_id === sectorId)),
+    );
+  },
+
+  reset: () =>
+    set({
+      loaded: false, loading: false, error: '', isAdmin: false,
+      missions: [], sectors: [], access: [], missionId: '', sectorId: '',
+    }),
+}));

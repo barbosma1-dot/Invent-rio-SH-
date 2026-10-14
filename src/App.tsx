@@ -5,6 +5,9 @@ import { isSupabaseConfigured } from './lib/supabase';
 import { Auth } from './Auth';
 import { Home } from './components/Home';
 import { Settings } from './components/Settings';
+import { Items } from './components/Items';
+import { PublicItem } from './components/PublicItem';
+import { useScope } from './scopeStore';
 import { Placeholder } from './components/Placeholder';
 import { LogoMenuButton, ThemeToggle } from './kit';
 import { APP_NAME, LOGO_ROUND } from './brand';
@@ -24,11 +27,32 @@ export default function App() {
   const { user, ready, init, signOut } = useSession();
   const [tab, setTab] = useState<Tab>('home');
   const [collapsed, setCollapsed] = useState(false);
+  const [path, setPath] = useState(window.location.pathname);
+  const [wantLogin, setWantLogin] = useState(false);
 
   useEffect(() => init(), [init]);
 
-  // Sincroniza com o Wop ao entrar e ao voltar para a aba (a Function limita a frequência).
+  // Rota pública do QR: /i/<id>
+  useEffect(() => {
+    const onPop = () => setPath(window.location.pathname);
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+  const publicId = path.match(/^\/i\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i)?.[1];
+  function leavePublic() {
+    window.history.pushState(null, '', '/');
+    setPath('/');
+    setWantLogin(false);
+  }
+
   const userId = user?.id;
+  // Carrega missões, setores e permissões do usuário (o banco filtra pelo que ele pode ver).
+  useEffect(() => {
+    if (userId) useScope.getState().load(userId);
+    else useScope.getState().reset();
+  }, [userId]);
+
+  // Sincroniza com o Wop ao entrar e ao voltar para a aba (a Function limita a frequência).
   useEffect(() => {
     if (!userId) return;
     autoSync();
@@ -60,17 +84,17 @@ export default function App() {
     );
   }
 
+  if (publicId) {
+    if (!user && wantLogin) return <Auth />;
+    return <PublicItem itemId={publicId.toLowerCase()} onLogin={() => setWantLogin(true)} onLeave={leavePublic} />;
+  }
+
   if (!user) return <Auth />;
 
   const page = (
     <>
       {tab === 'home' && <Home />}
-      {tab === 'items' && (
-        <Placeholder
-          title="Itens" subtitle="Inventário do seu setor." icon={Package} task="Tarefa T4"
-          items={['Cadastro com foto, nome, categoria e local de guarda', 'Valor de compra ou valor médio se doado', 'QR code para imprimir e leitura pela câmera']}
-        />
-      )}
+      {tab === 'items' && <Items />}
       {tab === 'moves' && (
         <Placeholder
           title="Movimentos" subtitle="Entradas, saídas e retornos." icon={ArrowLeftRight} task="Tarefa T5"
