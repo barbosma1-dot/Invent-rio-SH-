@@ -1,0 +1,88 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+@import "./kit/shalom-kit.css";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Identidade do app: azul-petróleo da logo. No escuro, um tom mais claro para ter contraste. */
+:root { --sh-primary: #0b5769; --sh-on-primary: #ffffff; --inv-accent-soft: #e3f1f4; }
+:root[data-theme="dark"] { --sh-primary: #3aa7bf; --sh-on-primary: #04202a; --inv-accent-soft: #10303a; }
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--sh-bg);
+  color: var(--sh-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- casca do app: menu lateral (computador) + barra inferior (celular) ---------- */
+.inv-shell { display: flex; flex-direction: column; height: 100%; }
+@media (min-width: 768px) { .inv-shell { flex-direction: row; } }
+
+.inv-side {
+  display: none;
+  flex-direction: column;
+  width: 16rem;
+  flex-shrink: 0;
+  background: var(--sh-surface);
+  border-right: 1px solid var(--sh-border);
+  transition: width 0.2s;
+}
+@media (min-width: 768px) { .inv-side { display: flex; } }
+.inv-side.is-collapsed { width: 5rem; }
+.inv-side-head { display: flex; align-items: center; gap: 0.75rem; padding: 1.25rem 1rem; }
+.inv-side.is-collapsed .inv-side-head { justify-content: center; padding-inline: 0; }
+.inv-brand { font-size: 0.85rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--sh-text); }
+.inv-side-nav { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.5rem 0.75rem; flex: 1; }
+.inv-side-foot { padding: 0.75rem; border-top: 1px solid var(--sh-border); display: flex; flex-direction: column; gap: 0.5rem; }
+
+.inv-nav-item {
+  display: flex; align-items: center; gap: 0.85rem;
+  min-height: var(--sh-touch); padding: 0 0.85rem;
+  border: 0; border-radius: var(--sh-radius-control);
+  background: transparent; color: var(--sh-text-muted);
+  font: inherit; font-size: 0.9rem; font-weight: 700; cursor: pointer; text-align: left;
+}
+.inv-nav-item:hover { background: var(--sh-surface-2); color: var(--sh-text); }
+.inv-nav-item[aria-current="page"] { background: var(--sh-primary); color: var(--sh-on-primary); }
+.inv-side.is-collapsed .inv-nav-item { justify-content: center; padding: 0; }
+.inv-side.is-collapsed .inv-nav-label { display: none; }
+
+/* topo no celular */
+.inv-topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  padding: calc(env(safe-area-inset-top, 0px) + 0.5rem) 1rem 0.5rem;
+  background: var(--sh-surface); border-bottom: 1px solid var(--sh-border);
+}
+@media (min-width: 768px) { .inv-topbar { display: none; } }
+.inv-topbar-brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 800; font-size: 0.95rem; }
+
+.inv-main { flex: 1; overflow-y: auto; min-width: 0; }
+
+/* barra inferior (celular) */
+.inv-bn-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.15rem;
+  border: 0; background: transparent; color: var(--sh-text-muted);
+  font: inherit; font-size: 0.65rem; font-weight: 700; cursor: pointer; min-width: 0;
+}
+.inv-bn-item[aria-current="page"] { color: var(--sh-primary); }
+.inv-bn-item[aria-current="page"] .inv-bn-icon { background: var(--inv-accent-soft); }
+.inv-bn-icon { display: flex; align-items: center; justify-content: center; width: 3.25rem; height: 1.75rem; border-radius: 999px; }
+
+/* utilidades de tela */
+.inv-soft { background: var(--inv-accent-soft); }
+.inv-field { display: flex; flex-direction: column; gap: 0.35rem; }
+.inv-label { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--sh-text-muted); }
+.inv-input {
+  width: 100%; min-height: var(--sh-touch); padding: 0 0.9rem;
+  border: 1px solid var(--sh-border); border-radius: var(--sh-radius-control);
+  background: var(--sh-surface); color: var(--sh-text); font: inherit; font-size: 1rem;
+}
+.inv-input:focus { outline: 2px solid var(--sh-primary); outline-offset: 1px; }
+.inv-error { padding: 0.75rem 0.9rem; border-radius: var(--sh-radius-control); font-size: 0.85rem; font-weight: 600;
+  color: var(--sh-danger); background: color-mix(in srgb, var(--sh-danger) 10%, var(--sh-surface)); border: 1px solid color-mix(in srgb, var(--sh-danger) 35%, var(--sh-border)); }
