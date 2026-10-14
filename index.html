@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Inventário Sh</title>
+    <script>
+      /* aplica o tema salvo antes de desenhar a tela (evita piscar branco) */
+      (function () {
+        try {
+          var m = localStorage.getItem('sh-theme') || 'auto', h = new Date().getHours();
+          var dark = m === 'escuro' || (m === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches) || (m === 'noturno' && (h >= 18 || h < 6));
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0b5769" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js');
+        });
+      }
+    </script>
+  </body>
+</html>
