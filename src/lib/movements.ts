@@ -169,13 +169,13 @@ export async function loadPeople(missionId: string, missionNames: Map<string, st
 }
 
 /** Telefone e foto (o banco só devolve para admin, gestor e coordenador). */
-export async function loadContact(type: RespType, id?: string): Promise<{ phone: string | null; photo_url: string | null } | null> {
+export async function loadContact(type: RespType, id?: string): Promise<{ phone: string | null; photo_url: string | null; email?: string | null } | null> {
   if (!supabase || !id || type === 'avulso') return null;
   const q = type === 'usuario'
     ? supabase.from('inv_profile_contacts').select('phone,photo_url').eq('user_id', id)
-    : supabase.from('inv_hub_member_contacts').select('phone,photo_url').eq('member_id', id);
+    : supabase.from('inv_hub_member_contacts').select('phone,photo_url,email').eq('member_id', id);
   const { data } = await q.maybeSingle();
-  return (data as { phone: string | null; photo_url: string | null } | null) ?? null;
+  return (data as { phone: string | null; photo_url: string | null; email?: string | null } | null) ?? null;
 }
 
 /** Telefone/foto guardados na movimentação (só quem edita o setor lê). */
