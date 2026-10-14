@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import QRCode from 'qrcode';
-import { Archive, ArchiveRestore, Download, ImageOff, Pencil, Printer, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowDownToLine, ArrowUpFromLine, Download, ImageOff, Pencil, Printer, Trash2, Undo2 } from 'lucide-react';
 import { Modal } from '../kit';
 import { supabase } from '../lib/supabase';
 import {
@@ -8,8 +8,10 @@ import {
   type Item, type ItemStatusRow, type Loc,
 } from '../lib/items';
 import { formatCurrency } from '../lib/utils';
+import { CONDITION_LABEL, MOVEMENT_COLUMNS, loadMovementContacts, type Movement, type MoveKind } from '../lib/movements';
 import { useScope } from '../scopeStore';
 import { ItemForm } from './ItemForm';
+import { MovementForm } from './MovementForm';
 
 function fmtDate(d: string | null) {
   if (!d) return '';
@@ -104,6 +106,10 @@ export function ItemDetail({
   const [baixaReason, setBaixaReason] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [history, setHistory] = useState<Movement[]>([]);
+  const [phones, setPhones] = useState<Map<string, { phone: string | null; photo_url: string | null }>>(new Map());
+  const [moveKind, setMoveKind] = useState<MoveKind | null>(null);
+  const [doneNotice, setDoneNotice] = useState('');
   const confirmRef = useRef<HTMLDivElement>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
 
@@ -118,16 +124,20 @@ export function ItemDetail({
       return;
     }
     const it = data as Item;
-    const [st, lc] = await Promise.all([
-      supabase.from('inv_item_status').select('item_id,status,overdue,expected_return,responsible_name').eq('item_id', itemId).maybeSingle(),
+    const [st, lc, mv] = await Promise.all([
+      supabase.from('inv_item_status').select('item_id,status,overdue,expected_return,responsible_name,open_saida_id').eq('item_id', itemId).maybeSingle(),
       supabase.from('inv_locations').select('id,sector_id,parent_id,name,sort_order').eq('sector_id', it.sector_id),
+      supabase.from('inv_movements').select(MOVEMENT_COLUMNS).eq('item_id', itemId).order('occurred_at', { ascending: false }).limit(30),
     ]);
+    const hist = (mv.data ?? []) as Movement[];
+    setHistory(hist);
+    setPhones(canEditSector(it.sector_id) ? await loadMovementContacts(hist.map((h) => h.id)) : new Map());
     setItem(it);
     setStatus((st.data as ItemStatusRow | null) ?? null);
     setLocs((lc.data ?? []) as Loc[]);
     setError('');
     setLoading(false);
-  }, [itemId]);
+  }, [itemId, canEditSector]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -231,6 +241,58 @@ export function ItemDetail({
               <Row label="Observações">{item.notes}</Row>
             </div>
 
+            {!item.baixa_at && (
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2 flex-wrap">
+                  {status?.open_saida_id ? (
+                    <button type="button" className="sh-btn sh-btn-primary" onClick={() => setMoveKind('retorno')} disabled={busy}>
+                      <Undo2 size={16} /> Registrar retorno
+                    </button>
+                  ) : status?.status === 'em_reparo' ? null : (
+                    <button type="button" className="sh-btn sh-btn-primary" onClick={() => setMoveKind('saida')} disabled={busy}>
+                      <ArrowUpFromLine size={16} /> Registrar saída
+                    </button>
+                  )}
+                  {canEdit && !history.some((h) => h.kind === 'entrada') && (
+                    <button type="button" className="sh-btn sh-btn-secondary" onClick={() => setMoveKind('entrada')} disabled={busy}>
+                      <ArrowDownToLine size={16} /> Registrar entrada
+                    </button>
+                  )}
+                </div>
+                {status?.status === 'em_reparo' && !status.open_saida_id && (
+                  <p className="text-xs" style={{ color: 'var(--sh-text-muted)' }}>Item em reparo: nova saída só depois de concluir o reparo.</p>
+                )}
+              </div>
+            )}
+
+            {doneNotice && <p className="text-sm font-bold" style={{ color: 'var(--sh-primary)' }}>{doneNotice}</p>}
+
+            {history.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <span className="inv-label">Histórico</span>
+                <ul className="flex flex-col gap-2">
+                  {history.map((h) => {
+                    const ph = phones.get(h.id)?.phone;
+                    return (
+                      <li key={h.id} className="sh-card text-sm flex flex-col" style={{ padding: '0.6rem 0.75rem', gap: 2 }}>
+                        <span className="font-bold">
+                          {h.kind === 'entrada' ? 'Entrada' : h.kind === 'saida' ? 'Saída' : 'Retorno'}
+                          {h.kind === 'saida' ? ` · ${h.saida_reason === 'evento' ? 'evento' : 'empréstimo'}` : ''}
+                          {h.kind === 'entrada' && h.entry_source ? ` · ${h.entry_source === 'compra' ? 'compra' : 'doação'}` : ''}
+                          {' · '}{fmtDate(h.occurred_at)}
+                        </span>
+                        <span style={{ overflowWrap: 'anywhere' }}>{h.responsible_name}{ph ? ` · ${ph}` : ''}</span>
+                        {h.kind === 'saida' && h.expected_return && <span className="text-xs" style={{ color: 'var(--sh-text-muted)' }}>Volta prevista {fmtDate(h.expected_return)}</span>}
+                        {h.kind === 'entrada' && h.value != null && <span className="text-xs" style={{ color: 'var(--sh-text-muted)' }}>{h.value_kind === 'estimado' ? 'Valor estimado' : 'Valor pago'}: {formatCurrency(Number(h.value))}</span>}
+                        {h.condition && <span className="text-xs" style={{ color: 'var(--sh-text-muted)' }}>Condição: {CONDITION_LABEL[h.condition]}{h.needs_repair ? ' · precisa de reparo' : ''}</span>}
+                        {h.notes && <span className="text-xs" style={{ color: 'var(--sh-text-muted)', overflowWrap: 'anywhere' }}>{h.notes}</span>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+
             <QRBlock item={item} sectorName={sectorName} />
 
             {error && <p ref={errorRef} className="inv-error" role="alert">{error}</p>}
@@ -280,6 +342,23 @@ export function ItemDetail({
           </div>
         )}
       </Modal>
+
+      {item && moveKind && (
+        <MovementForm
+          open
+          kind={moveKind}
+          itemId={item.id}
+          saidaId={status?.open_saida_id ?? null}
+          onClose={() => setMoveKind(null)}
+          onDone={async (warning) => {
+            const k = moveKind;
+            setMoveKind(null);
+            setDoneNotice(warning ?? (k === 'entrada' ? 'Entrada registrada.' : k === 'saida' ? 'Saída registrada.' : 'Retorno registrado.'));
+            await load();
+            onChanged?.();
+          }}
+        />
+      )}
 
       {item && (
         <ItemForm
